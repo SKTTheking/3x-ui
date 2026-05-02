@@ -2204,45 +2204,44 @@ ${blue}x-ui uninstall${plain}             - 卸载
 
 show_menu() {
     echo -e "
-╔────────────────────────────────────────────────╗
-│   ${green}3X-UI Panel Management Script${plain}                │
-│   ${green}0.${plain} Exit Script                               │
-│────────────────────────────────────────────────│
-│   ${green}1.${plain} Install                                   │
-│   ${green}2.${plain} Update                                    │
-│   ${green}3.${plain} Update Menu                               │
-│   ${green}4.${plain} Legacy Version                            │
-│   ${green}5.${plain} Uninstall                                 │
-│────────────────────────────────────────────────│
-│   ${green}6.${plain} Reset Username & Password                 │
-│   ${green}7.${plain} Reset Web Base Path                       │
-│   ${green}8.${plain} Reset Settings                            │
-│   ${green}9.${plain} Change Port                               │
-│  ${green}10.${plain} View Current Settings                     │
-│────────────────────────────────────────────────│
-│  ${green}11.${plain} Start                                     │
-│  ${green}12.${plain} Stop                                      │
-│  ${green}13.${plain} Restart                                   │
-|  ${green}14.${plain} Restart Xray                              │
-│  ${green}15.${plain} Check Status                              │
-│  ${green}16.${plain} Logs Management                           │
-│────────────────────────────────────────────────│
-│  ${green}17.${plain} Enable Autostart                          │
-│  ${green}18.${plain} Disable Autostart                         │
-│────────────────────────────────────────────────│
-│  ${green}19.${plain} SSL Certificate Management                │
-│  ${green}20.${plain} Cloudflare SSL Certificate                │
-│  ${green}21.${plain} IP Limit Management                       │
-│  ${green}22.${plain} Firewall Management                       │
-│  ${green}23.${plain} SSH Port Forwarding Management            │
-│────────────────────────────────────────────────│
-│  ${green}24.${plain} Enable BBR                                │
-│  ${green}25.${plain} Update Geo Files                          │
-│  ${green}26.${plain} Speedtest by Ookla                        │
-╚────────────────────────────────────────────────╝
+${green}3X-UI 面板管理脚本${plain}
+
+${green}0.${plain} 退出脚本
+
+${green}1.${plain} 安装
+${green}2.${plain} 更新
+${green}3.${plain} 更新菜单
+${green}4.${plain} 旧版本
+${green}5.${plain} 卸载
+
+${green}6.${plain} 重置用户名和密码
+${green}7.${plain} 重置网页路径
+${green}8.${plain} 重置设置
+${green}9.${plain} 修改端口
+${green}10.${plain} 查看当前设置
+
+${green}11.${plain} 启动
+${green}12.${plain} 停止
+${green}13.${plain} 重启
+${green}14.${plain} 重启 Xray
+${green}15.${plain} 查看状态
+${green}16.${plain} 日志管理
+
+${green}17.${plain} 开启开机自启
+${green}18.${plain} 关闭开机自启
+
+${green}19.${plain} SSL 证书管理
+${green}20.${plain} Cloudflare SSL 证书
+${green}21.${plain} IP 限制管理
+${green}22.${plain} 防火墙管理
+${green}23.${plain} SSH 端口转发管理
+
+${green}24.${plain} 开启 BBR
+${green}25.${plain} 更新 Geo 文件
+${green}26.${plain} Ookla 测速
 "
     show_status
-    echo && read -rp "Please enter your selection [0-26]: " num
+    echo && read -rp "请输入你的选项 [0-26]: " num
 
     case "${num}" in
     0)
