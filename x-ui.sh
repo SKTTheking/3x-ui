@@ -2180,26 +2180,26 @@ SSH_port_forwarding() {
 }
 
 show_usage() {
-    echo -e "┌────────────────────────────────────────────────────────────────┐
-│  ${blue}x-ui control menu usages (subcommands):${plain}                       │
-│                                                                │
-│  ${blue}x-ui${plain}                       - Admin Management Script          │
-│  ${blue}x-ui start${plain}                 - Start                            │
-│  ${blue}x-ui stop${plain}                  - Stop                             │
-│  ${blue}x-ui restart${plain}               - Restart                          │
-|  ${blue}x-ui restart-xray${plain}          - Restart Xray                     │
-│  ${blue}x-ui status${plain}                - Current Status                   │
-│  ${blue}x-ui settings${plain}              - Current Settings                 │
-│  ${blue}x-ui enable${plain}                - Enable Autostart on OS Startup   │
-│  ${blue}x-ui disable${plain}               - Disable Autostart on OS Startup  │
-│  ${blue}x-ui log${plain}                   - Check logs                       │
-│  ${blue}x-ui banlog${plain}                - Check Fail2ban ban logs          │
-│  ${blue}x-ui update${plain}                - Update                           │
-│  ${blue}x-ui update-all-geofiles${plain}   - Update all geo files             │
-│  ${blue}x-ui legacy${plain}                - Legacy version                   │
-│  ${blue}x-ui install${plain}               - Install                          │
-│  ${blue}x-ui uninstall${plain}             - Uninstall                        │
-└────────────────────────────────────────────────────────────────┘"
+    echo -e "
+${blue}x-ui 控制菜单用法（子命令）:${plain}
+
+${blue}x-ui${plain}                       - 管理脚本
+${blue}x-ui start${plain}                 - 启动服务
+${blue}x-ui stop${plain}                  - 停止服务
+${blue}x-ui restart${plain}               - 重启服务
+${blue}x-ui restart-xray${plain}          - 重启 Xray
+${blue}x-ui status${plain}                - 查看当前状态
+${blue}x-ui settings${plain}              - 查看当前设置
+${blue}x-ui enable${plain}                - 设置开机自启
+${blue}x-ui disable${plain}               - 关闭开机自启
+${blue}x-ui log${plain}                   - 查看日志
+${blue}x-ui banlog${plain}                - 查看 Fail2ban 封禁日志
+${blue}x-ui update${plain}                - 更新面板
+${blue}x-ui update-all-geofiles${plain}   - 更新全部 geo 文件
+${blue}x-ui legacy${plain}                - 旧版本
+${blue}x-ui install${plain}               - 安装
+${blue}x-ui uninstall${plain}             - 卸载
+"
 }
 
 show_menu() {
