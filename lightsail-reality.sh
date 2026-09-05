@@ -10,8 +10,11 @@ export LSX_STATE_DIR=/etc/x-ui/lightsail-reality
 export XUI_DB_FOLDER=/etc/x-ui
 export XUI_BIN_FOLDER=/usr/local/x-ui/bin
 export TARGET_SNI="${TARGET_SNI:-mirrors-package-mc.aki-game.net}"
-export REALITY_PORT="${REALITY_PORT:-443}"
+export REALITY_PORT="${REALITY_PORT:-}"
 export PANEL_PORT="${PANEL_PORT:-54321}"
+export PANEL_USERNAME="${PANEL_USERNAME:-}"
+export PANEL_PASSWORD="${PANEL_PASSWORD:-}"
+export PANEL_PASSWORD_HASH="${PANEL_PASSWORD_HASH:-}"
 export SERVER_IP="${SERVER_IP:-}"
 export ADMIN_CIDR="${ADMIN_CIDR:-}"
 die() {
@@ -68,8 +71,40 @@ apt-get -o DPkg::Lock::Timeout=300 -o Acquire::Retries=3 update
 apt-get -o DPkg::Lock::Timeout=300 -o Acquire::Retries=3 install -y --no-install-recommends ca-certificates curl python3 openssl tar iproute2 kmod util-linux
 
 echo '[2/6] 检测端口、公网 IP 和 REALITY 目标站'
+REALITY_PORT=$(python3 - <<'PY_PORT'
+import os, secrets, socket
+requested = os.environ.get('REALITY_PORT', '')
+if requested:
+    if not requested.isdecimal() or not 1 <= int(requested) <= 65535:
+        raise SystemExit('REALITY_PORT 必须是合法端口。')
+    print(int(requested))
+else:
+    for port in secrets.SystemRandom().sample(range(20000, 50000), 100):
+        if str(port) == os.environ['PANEL_PORT']: continue
+        with socket.socket() as sock:
+            try: sock.bind(('0.0.0.0', port))
+            except OSError: continue
+            print(port)
+            break
+    else: raise SystemExit('未找到空闲随机端口。')
+PY_PORT
+)
+export REALITY_PORT
+echo "本次节点 TCP 端口：$REALITY_PORT（请在 Lightsail 云防火墙放行此端口）"
 python3 - <<'PY_PREFLIGHT'
 import ipaddress, os, re, socket, ssl
+username, password = os.environ['PANEL_USERNAME'], os.environ['PANEL_PASSWORD']
+password_hash = os.environ['PANEL_PASSWORD_HASH']
+if password and password_hash:
+    raise SystemExit('PANEL_PASSWORD 与 PANEL_PASSWORD_HASH 只能设置一个。')
+if bool(username) != bool(password or password_hash):
+    raise SystemExit('自定义账号需同时设置密码或 bcrypt 密码哈希。')
+if password_hash and not re.fullmatch(r'\$2[aby]\$(?:0[4-9]|1[0-6])\$[./A-Za-z0-9]{53}', password_hash):
+    raise SystemExit('PANEL_PASSWORD_HASH 必须是有效的 bcrypt 哈希。')
+if username and not re.fullmatch(r'[A-Za-z0-9_.-]{3,64}', username):
+    raise SystemExit('面板用户名需为 3–64 位字母、数字、下划线、点或短横线。')
+if password and (not 12 <= len(password) <= 128 or any(ord(c) < 32 or ord(c) == 127 for c in password)):
+    raise SystemExit('面板密码需为 12–128 个字符且不含控制字符。')
 ports = [os.environ['REALITY_PORT'], os.environ['PANEL_PORT']]
 if any(not p.isdecimal() or not 1024 <= int(p) <= 65535 and p != '443' for p in ports):
     raise SystemExit('端口应为 1024–65535 或 443。')
@@ -152,23 +187,32 @@ private = next((v for k, v in keys.items() if 'private' in k), '')
 public = next((v for k, v in keys.items() if 'public' in k or 'password' in k), '')
 if not all(re.fullmatch(r'[A-Za-z0-9_-]{43}', v) for v in [private, public]):
     raise RuntimeError('无法解析 Xray X25519 密钥。')
-c = dict(username='ls_' + secrets.token_hex(4), password=secrets.token_urlsafe(24),
+c = dict(username=os.environ.get('PANEL_USERNAME') or 'ls_' + secrets.token_hex(4),
+         password=os.environ.get('PANEL_PASSWORD') or secrets.token_urlsafe(24),
          base_path='/' + secrets.token_urlsafe(18) + '/', uuid=str(uuid.uuid4()),
          short_id=secrets.token_hex(8), private_key=private, public_key=public,
          server_ip=os.environ['SERVER_IP'], sni=os.environ['TARGET_SNI'],
          panel_port=int(os.environ['PANEL_PORT']), port=int(os.environ['REALITY_PORT']),
          version=os.environ['LSX_VERSION'])
+password_hash = os.environ.get('PANEL_PASSWORD_HASH', '')
+initial_password = c['password']
+if password_hash:
+    c['password'] = '（使用你预设的面板密码）'
 save('credentials.json', c)
 cert, key = state/'panel.crt', state/'panel.key'
 run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-sha256', '-nodes', '-days', '3650',
      '-keyout', key, '-out', cert, '-subj', '/CN=Lightsail-3x-ui',
      '-addext', 'subjectAltName=IP:' + c['server_ip'] + ',IP:127.0.0.1'])
-run([root/'x-ui', 'setting', '-username', c['username'], '-password', c['password'],
+run([root/'x-ui', 'setting', '-username', c['username'], '-password', initial_password,
      '-port', c['panel_port'], '-webBasePath', c['base_path'], '-listenIP', '0.0.0.0',
      '-webCert', cert, '-webCertKey', key])
 db = dbdir/'x-ui.db'
 if not db.is_file(): raise RuntimeError('面板未建立数据库。')
 with sqlite3.connect(db) as conn:
+    if password_hash:
+        conn.execute('UPDATE users SET password=? WHERE id=(SELECT id FROM users ORDER BY id LIMIT 1)', (password_hash,))
+        if conn.execute('SELECT password FROM users ORDER BY id LIMIT 1').fetchone()[0] != password_hash:
+            raise RuntimeError('预设密码哈希未正确保存。')
     # Disable unused subscription listeners; use official CLI for credentials.
     for k in ['subEnable', 'subJsonEnable', 'subClashEnable']:
         conn.execute('DELETE FROM settings WHERE key=?', (k,))
@@ -197,6 +241,7 @@ inbound = dict(remark='Lightsail-REALITY', enable=True, listen='0.0.0.0', port=c
 save('inbound.json', inbound)
 print('面板与节点配置已生成；密钥未写入公共仓库。')
 PY_SETUP
+unset PANEL_USERNAME PANEL_PASSWORD PANEL_PASSWORD_HASH
 cat > /etc/systemd/system/x-ui.service <<'UNIT'
 [Unit]
 Description=3x-ui Lightsail REALITY
