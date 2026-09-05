@@ -3,8 +3,8 @@
 set -Eeuo pipefail
 umask 077
 export LC_ALL=C
-VERSION=v3.7.0
-export LSX_VERSION="$VERSION"
+readonly XUI_RELEASE=v3.7.0
+export LSX_VERSION="$XUI_RELEASE"
 export LSX_PANEL_DIR=/usr/local/x-ui
 export LSX_STATE_DIR=/etc/x-ui/lightsail-reality
 export XUI_DB_FOLDER=/etc/x-ui
@@ -154,10 +154,10 @@ PY_IP
 SERVER_IP="${SERVER_IP//[[:space:]]/}"
 echo '[3/6] 下载固定正式版并验证 SHA-256'
 curl -fL --retry 3 --connect-timeout 15 --max-time 600 \
-    "https://github.com/MHSanaei/3x-ui/releases/download/$VERSION/x-ui-linux-$ARCH.tar.gz" -o "$TEMP_DIR/release.tar.gz"
+    "https://github.com/MHSanaei/3x-ui/releases/download/$XUI_RELEASE/x-ui-linux-$ARCH.tar.gz" -o "$TEMP_DIR/release.tar.gz"
 printf '%s  %s\n' "$SHA" "$TEMP_DIR/release.tar.gz" | sha256sum -c -
 tar --no-same-owner -xzf "$TEMP_DIR/release.tar.gz" -C "$TEMP_DIR"
-[[ "$("$TEMP_DIR/x-ui/x-ui" -v)" == "${VERSION#v}" ]] || die '面板版本不匹配。'
+[[ "$("$TEMP_DIR/x-ui/x-ui" -v)" == "${XUI_RELEASE#v}" ]] || die '面板版本不匹配。'
 [[ -x "$TEMP_DIR/x-ui/bin/xray-linux-$ARCH" && -f "$TEMP_DIR/x-ui/x-ui.sh" ]] || die '安装包缺少必要文件。'
 CHANGED=1
 install -d -m 700 "$LSX_STATE_DIR"
