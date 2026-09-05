@@ -4,7 +4,35 @@
 
 使用已有的 `SKTTheking/3x-ui` 官方 Fork，新增独立安装入口；保留原仓库内容。面板与内核来自 **MHSanaei/3x-ui v3.7.0 正式发布包**，安装时验证固定 SHA-256，避免跟随 main/dev 自动变化。这里选择的是维护中的正式版，不代表存在能够客观保证“最稳定”的版本。
 
-## 安装
+## 创建实例时自动安装，登录 SSH 自动显示节点
+
+在 Lightsail 创建实例页面选择全新 Ubuntu 24.04，展开 **添加启动脚本 / Add launch script**，粘贴下面整段，再创建实例：
+
+```bash
+#!/bin/bash
+set -e
+export DEBIAN_FRONTEND=noninteractive
+if ! command -v curl >/dev/null 2>&1; then
+    apt-get -o DPkg::Lock::Timeout=300 update
+    apt-get -o DPkg::Lock::Timeout=300 install -y ca-certificates curl
+fi
+curl -fL --retry 5 --connect-timeout 15 --max-time 180 https://raw.githubusercontent.com/SKTTheking/3x-ui/main/lightsail-launch.sh -o /root/lightsail-launch.sh
+bash /root/lightsail-launch.sh
+```
+
+也可查看完整的 [`lightsail-user-data.sh`](lightsail-user-data.sh)，复制其文件内容。
+
+创建后放行 IPv4 TCP 443（节点）和 TCP 54321（面板，限制管理 IP），保留 SSH 规则。安装在后台运行，不需要先打开 SSH，也不需要保持浏览器开启。
+
+安装成功后，使用 Lightsail 自带的浏览器 SSH 连接：终端会自动显示 `vless://` 节点链接，以及面板地址和账号密码。过早连接时会显示“正在自动安装”；等待后重新连接即可。安装失败则显示失败提示及日志查看命令，不输出成功节点。
+
+自动显示适用于 root 或拥有现成免密 sudo 权限的默认 Ubuntu 管理员；脚本不添加 sudo 权限，也不会把密码放进所有用户可读的登录公告。只有带终端的 SSH 登录会显示信息，不影响 scp/sftp 或非交互 SSH 命令。若修改了登录 shell 或 sudo 权限，可手动运行 `sudo lightsail-reality-info`。
+
+安装日志：`sudo tail -n 60 /var/lib/lightsail-reality-launch/install.log`。如果连登录提示都没出现，先用 `sudo tail -n 60 /var/log/cloud-init-output.log` 查看最初下载启动脚本时是否失败。
+
+启动脚本在创建实例的首次启动时安装；之后重启由 systemd 启动已安装的面板，不重新生成密钥。通过面板手动修改配置后，登录输出仍是保存的安装信息。
+
+## 已创建实例：手动安装
 
 1. 在 Lightsail 建立全新 Ubuntu 24.04 实例，建议先绑定静态 IPv4。
 2. 打开实例的 **Networking / 联网 → IPv4 防火墙**，保留 SSH 原规则，添加：
@@ -68,12 +96,15 @@ sysctl net.ipv4.tcp_congestion_control net.core.default_qdisc
 
 这些验证在隔离环境中运行，没有使用你的 AWS 实例。真实 Lightsail 的 apt/systemd、防火墙、内核 BBR、指定目标站及客户端公网连通，需要在实例运行安装后确认。arm64 发布包哈希已从官方发布元数据固定，但未执行 arm64 二进制测试。
 
+启动脚本补充验证：Bash/POSIX shell 语法、安装中/失败/成功提示、非管理员无法直接读取凭据、非交互 SSH 无输出，以及交互终端通过现有免密 sudo 调用显示程序。尚未在真实 Lightsail cloud-init 中完成整机部署验证。
+
 ## 上游与依据
 
 - [3x-ui v3.7.0 正式发布](https://github.com/MHSanaei/3x-ui/releases/tag/v3.7.0)
 - [3x-ui 官方安装说明](https://github.com/MHSanaei/3x-ui/wiki/Installation)
 - [REALITY 官方说明](https://github.com/XTLS/REALITY)
 - [AWS Lightsail 防火墙设置](https://docs.aws.amazon.com/lightsail/latest/userguide/amazon-lightsail-editing-firewall-rules.html)
+- [AWS Lightsail 启动脚本说明](https://docs.aws.amazon.com/lightsail/latest/userguide/lightsail-how-to-configure-server-additional-data-shell-script.html)
 - [AWS Lightsail IP 地址说明](https://docs.aws.amazon.com/lightsail/latest/userguide/understanding-public-ip-and-private-ip-addresses-in-amazon-lightsail.html)
 
 本脚本沿用仓库 GPL-3.0 许可。手动从面板或 `x-ui` 菜单升级将脱离此处已验证的版本组合；升级前备份 `/etc/x-ui`。
