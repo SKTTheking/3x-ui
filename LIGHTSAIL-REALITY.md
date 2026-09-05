@@ -2,7 +2,7 @@
 
 适用于全新 AWS Lightsail Ubuntu 22.04/24.04、Debian 12/13 实例，支持 amd64/arm64。无需 Docker。协议是 **VLESS + TCP + REALITY + xtls-rprx-vision**。
 
-使用已有的 `SKTTheking/3x-ui` 官方 Fork，新增独立安装入口；保留原仓库内容。面板与内核来自 **MHSanaei/3x-ui v3.7.0 正式发布包**，安装时验证固定 SHA-256，避免跟随 main/dev 自动变化。这里选择的是维护中的正式版，不代表存在能够客观保证“最稳定”的版本。
+使用已有的 `SKTTheking/3x-ui` 官方 Fork，新增独立安装入口；保留原仓库内容。面板来自 **MHSanaei/3x-ui v3.7.0 正式发布包**，Xray 内核单独固定为 **v26.6.27**；两份下载分别验证固定 SHA-256，避免跟随 main/dev 自动变化。Xray 使用[官方 v26.6.27 发布包](https://github.com/XTLS/Xray-core/releases/tag/v26.6.27)（上游标记为 Pre-release），这是用户在现有客户端上实测能用的版本，不代表对所有客户端的兼容保证。
 
 ## 创建实例时自动安装，登录 SSH 自动显示节点
 
@@ -57,8 +57,8 @@ bash /root/lightsail-launch.sh
 - 安装依赖，等待 apt/dpkg 锁，校验操作系统、架构和端口占用。默认从 20000–49999 选择一个空闲节点端口，排除面板端口；首次安装后固定，重启不会换端口。
 - 从实例内检测目标域名 **`mirrors-package-mc.aki-game.net:443`** 的证书、TLS 1.3 和 HTTP/2；不满足就停止，不偷偷切换域名。这只是必要条件检查，不是对目标站长期可用性的保证。
 - 通过 AWS IMDSv2 获取公网 IPv4，失败后使用 AWS 公网 IP 查询服务。
-- 下载固定 v3.7.0 发布包，校验 SHA-256，然后安装面板和该发布包内的 Xray **26.7.28**。
-- 默认生成随机账号、密码、面板路径、UUID、X25519 密钥及 short ID；可通过实例环境变量预设面板账号和密码，公共脚本不包含个人凭据。
+- 下载固定 v3.7.0 面板发布包及 Xray **v26.6.27** 发布包，分别校验 SHA-256；在首次启动前替换内核并核对版本，下载或校验失败就停止，不回退使用面板捆绑的较新内核。
+- 面板路径固定为 `/`，直接访问 `https://公网IP:54321/`；默认生成随机账号、密码、UUID、X25519 密钥及 short ID；可通过实例环境变量预设面板账号和密码，公共脚本不包含个人凭据。
 - 利用官方 CLI 初始化账号，通过本机 HTTPS API 建立一个无限流量/无到期时间的节点；关闭未使用的订阅监听。
 - 验证入站创建、Xray 配置、监听进程及最终重启后的 HTTPS 页面；撤销初始化 API 令牌。
 - 内核支持时启用 BBR、将默认队列设为 fq，并写入持久化 sysctl 文件；不升级内核、不重启机器，不强制替换现有网卡队列。BBR 的提速效果取决于网络，不能保证提升，也不能解决 IP 被封。
@@ -77,7 +77,7 @@ sudo env PANEL_PORT=54321 REALITY_PORT=443 SERVER_IP=你的公网IPv4 ADMIN_CIDR
 - 默认不用传参数；`SERVER_IP` 用于自动识别失败或出口与静态 IP 不一致时。
 - `ADMIN_CIDR` 仅限制脚本添加的本机防火墙面板规则；原有的宽泛放行规则仍然有效，需要自行检查。云防火墙仍需设置。
 - 需要换目标域名时，在首次安装前使用 `sudo env TARGET_SNI=新的域名 bash lightsail-reality.sh`。
-- Xray 26.7.28 的默认 REALITY 最低客户端内核版本为 26.3.27；旧内核可能被拒绝。请检查客户端内核版本，不要只看 v2rayN 界面版本。其他内核客户端需支持相应 REALITY 握手。
+- 此次固定内核的依据：用户报告服务端 v26.7.28 无法连接，降为 v26.6.27 后恢复；其 v2rayN 日志显示客户端内核为 25.5.16。不要只看 v2rayN 界面版本。安装脚本不会自动升级 Xray；手动升级面板或内核可能改变此组合。
 
 ## 查看信息与排查
 
@@ -120,3 +120,7 @@ sysctl net.ipv4.tcp_congestion_control net.core.default_qdisc
 - [AWS Lightsail IP 地址说明](https://docs.aws.amazon.com/lightsail/latest/userguide/understanding-public-ip-and-private-ip-addresses-in-amazon-lightsail.html)
 
 本脚本沿用仓库 GPL-3.0 许可。手动从面板或 `x-ui` 菜单升级将脱离此处已验证的版本组合；升级前备份 `/etc/x-ui`。
+
+内核固定与面板路径更新：新安装默认 Xray v26.6.27，面板根路径 `/`；已部署服务器不被远程修改。个性化独立启动文件需要重新下载，旧文件中的内嵌代码不会自动更新。
+
+本次补充验证：实际 v26.6.27 amd64 内核与 3x-ui v3.7.0 完成根路径 HTTPS/API 初始化、预设密码哈希保留、重复入站保护、令牌撤销及重启检查；使用官方 Xray v25.5.16 Linux 客户端与 v26.6.27 服务端完成 REALITY/Vision 本地 HTTP 请求往返。用户另已报告其 Windows v2rayN 使用降级后的服务器恢复连接。未重新创建 AWS 实例验证整段启动流程。

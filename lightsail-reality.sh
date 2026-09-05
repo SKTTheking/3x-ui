@@ -4,7 +4,9 @@ set -Eeuo pipefail
 umask 077
 export LC_ALL=C
 readonly XUI_RELEASE=v3.7.0
+readonly XRAY_RELEASE=v26.6.27
 export LSX_VERSION="$XUI_RELEASE"
+export LSX_XRAY_VERSION="$XRAY_RELEASE"
 export LSX_PANEL_DIR=/usr/local/x-ui
 export LSX_STATE_DIR=/etc/x-ui/lightsail-reality
 export XUI_DB_FOLDER=/etc/x-ui
@@ -46,8 +48,12 @@ case "$ID:$VERSION_ID" in
     *) die '支持 Ubuntu 22.04/24.04、Debian 12/13；建议使用 Lightsail Ubuntu 24.04。' ;;
 esac
 case "$(uname -m)" in
-    x86_64) ARCH=amd64; SHA=0f8dd7baef3458f6591574e24814f322cf7f5e1e27f0a594683745e50be84ec5 ;;
-    aarch64|arm64) ARCH=arm64; SHA=3caf1db1e8b10bb1fa1324c945522690bcf01c533ee75b377268f1c01a3ce896 ;;
+    x86_64)
+        ARCH=amd64; SHA=0f8dd7baef3458f6591574e24814f322cf7f5e1e27f0a594683745e50be84ec5
+        XRAY_ASSET=64; XRAY_SHA=b3e5902d06d6282fe53cfa2fc426058b9aeaa429b2c812e20887cd47f26d08bf ;;
+    aarch64|arm64)
+        ARCH=arm64; SHA=3caf1db1e8b10bb1fa1324c945522690bcf01c533ee75b377268f1c01a3ce896
+        XRAY_ASSET=arm64-v8a; XRAY_SHA=13a251379bea366c2cf10363ad71e75734193d401f26f518bf0c25e5c8f8c931 ;;
     *) die '仅支持 amd64 和 arm64。' ;;
 esac
 export LSX_ARCH="$ARCH"
@@ -152,13 +158,27 @@ except ValueError:
     raise SystemExit('无法确认公网 IPv4，请用 sudo env SERVER_IP=你的公网IP bash lightsail-reality.sh。')
 PY_IP
 SERVER_IP="${SERVER_IP//[[:space:]]/}"
-echo '[3/6] 下载固定正式版并验证 SHA-256'
+echo "[3/6] 下载面板 $XUI_RELEASE 和 Xray $XRAY_RELEASE，验证 SHA-256"
 curl -fL --retry 3 --connect-timeout 15 --max-time 600 \
     "https://github.com/MHSanaei/3x-ui/releases/download/$XUI_RELEASE/x-ui-linux-$ARCH.tar.gz" -o "$TEMP_DIR/release.tar.gz"
 printf '%s  %s\n' "$SHA" "$TEMP_DIR/release.tar.gz" | sha256sum -c -
 tar --no-same-owner -xzf "$TEMP_DIR/release.tar.gz" -C "$TEMP_DIR"
 [[ "$("$TEMP_DIR/x-ui/x-ui" -v)" == "${XUI_RELEASE#v}" ]] || die '面板版本不匹配。'
 [[ -x "$TEMP_DIR/x-ui/bin/xray-linux-$ARCH" && -f "$TEMP_DIR/x-ui/x-ui.sh" ]] || die '安装包缺少必要文件。'
+# Pin the core separately; do not use the newer binary bundled with the panel.
+curl -fL --retry 3 --connect-timeout 15 --max-time 600 \
+    "https://github.com/XTLS/Xray-core/releases/download/$XRAY_RELEASE/Xray-linux-$XRAY_ASSET.zip" -o "$TEMP_DIR/xray.zip"
+printf '%s  %s\n' "$XRAY_SHA" "$TEMP_DIR/xray.zip" | sha256sum -c -
+python3 - "$TEMP_DIR" "$ARCH" <<'PY_XRAY'
+import pathlib, sys, zipfile
+temp = pathlib.Path(sys.argv[1])
+binary = temp / 'x-ui' / 'bin' / ('xray-linux-' + sys.argv[2])
+with zipfile.ZipFile(temp / 'xray.zip') as archive:
+    binary.write_bytes(archive.read('xray'))
+binary.chmod(0o755)
+PY_XRAY
+XRAY_ACTUAL=$("$TEMP_DIR/x-ui/bin/xray-linux-$ARCH" version)
+[[ "$XRAY_ACTUAL" == "Xray ${XRAY_RELEASE#v} "* ]] || die 'Xray 版本不匹配。'
 CHANGED=1
 install -d -m 700 "$LSX_STATE_DIR"
 mv "$TEMP_DIR/x-ui" "$LSX_PANEL_DIR"
@@ -189,11 +209,11 @@ if not all(re.fullmatch(r'[A-Za-z0-9_-]{43}', v) for v in [private, public]):
     raise RuntimeError('无法解析 Xray X25519 密钥。')
 c = dict(username=os.environ.get('PANEL_USERNAME') or 'ls_' + secrets.token_hex(4),
          password=os.environ.get('PANEL_PASSWORD') or secrets.token_urlsafe(24),
-         base_path='/' + secrets.token_urlsafe(18) + '/', uuid=str(uuid.uuid4()),
+         base_path='/', uuid=str(uuid.uuid4()),
          short_id=secrets.token_hex(8), private_key=private, public_key=public,
          server_ip=os.environ['SERVER_IP'], sni=os.environ['TARGET_SNI'],
          panel_port=int(os.environ['PANEL_PORT']), port=int(os.environ['REALITY_PORT']),
-         version=os.environ['LSX_VERSION'])
+         version=os.environ['LSX_VERSION'], xray_version=os.environ['LSX_XRAY_VERSION'])
 password_hash = os.environ.get('PANEL_PASSWORD_HASH', '')
 initial_password = c['password']
 if password_hash:
@@ -322,7 +342,7 @@ query = urllib.parse.urlencode(dict(encryption='none', security='reality', sni=c
 link = f"vless://{c['uuid']}@{c['server_ip']}:{c['port']}?{query}#Lightsail-REALITY"
 fingerprint = subprocess.check_output(['openssl','x509','-in',str(state/'panel.crt'),
     '-noout','-fingerprint','-sha256'], text=True).strip()
-text = f"""3x-ui {c['version']} + VLESS/REALITY
+text = f"""3x-ui {c['version']} + Xray {c['xray_version']} + VLESS/REALITY
 面板：https://{c['server_ip']}:{c['panel_port']}{c['base_path']}
 用户名：{c['username']}
 密码：{c['password']}
